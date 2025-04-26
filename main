@@ -1,101 +1,122 @@
---// Blood Debt ESP Script (Self-Reloading) //--
+--// Blood Debt ESP Script (Full with Cleanup + Reload) //--
 
--- Self reload setup
-local sourceURL = "https://raw.githubusercontent.com/uzergit/blooddebt-rbx/refs/heads/main/main"
-
-local function reloadScript()
-    task.spawn(function()
-        local newScript = loadstring(game:HttpGet(sourceURL))()
-    end)
-end
+-- Unique identifier for this script instance
+local UNIQUE = "BloodDebt_ESP_V1"
 
 -- Services
-local Players    = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local lp         = Players.LocalPlayer
+local Players = game:GetService("Players")
+local lp      = Players.LocalPlayer
 
 -- Weapon lookup tables
 local killerWeapons = {
-    ["Charcoal Steel JS-22"] = true, ["Pretty Pink RR-LCP"] = true, ["JS-2 BondsDerringy"] = true,
-    ["GILDED"] = true, ["Kamatov"] = true, ["JS2-Derringy"] = true, ["JS-22"] = true,
-    ["NGO"] = true, ["Throwing Dagger"] = true, ["SoundMaker"] = true, ["SoundMakerSlower"] = true,
-    ["RR-LightCompactPistolS"] = true, ["J9-Mereta"] = true, ["RY's GG-17"] = true,
-    ["RR-LCP"] = true, ["JS1 Competitor"] = true, ["AT's KAR15"] = true, ["VK's ANM"] = true,
-    ["Clothed Sawn-off"] = true, ["Sawn-off"] = true, ["Clothed Rosen-Obrez"] = true,
-    ["Rosen-Obrez"] = true, ["Dark Steel K1911"] = true, ["Silver Steel K1911"] = true,
-    ["K1911"] = true, ["ZZ-90"] = true, ["SKORPION"] = true
+    ["Charcoal Steel JS-22"]=true, ["Pretty Pink RR-LCP"]=true, ["JS-2 BondsDerringy"]=true,
+    ["GILDED"]=true, ["Kamatov"]=true, ["JS2-Derringy"]=true, ["JS-22"]=true,
+    ["NGO"]=true, ["Throwing Dagger"]=true, ["SoundMaker"]=true, ["SoundMakerSlower"]=true,
+    ["RR-LightCompactPistolS"]=true, ["J9-Mereta"]=true, ["RY's GG-17"]=true,
+    ["RR-LCP"]=true, ["JS1 Competitor"]=true, ["AT's KAR15"]=true, ["VK's ANM"]=true,
+    ["Clothed Sawn-off"]=true, ["Sawn-off"]=true, ["Clothed Rosen-Obrez"]=true,
+    ["Rosen-Obrez"]=true, ["Dark Steel K1911"]=true, ["Silver Steel K1911"]=true,
+    ["K1911"]=true, ["ZZ-90"]=true, ["SKORPION"]=true
 }
-
 local vigilanteWeapons = {
-    ["Beagle"] = true, ["I-412"] = true, ["Silver Steel RR-Snubby"] = true,
-    ["RR-Snubby"] = true, ["GG-17"] = true, ["J9-M"] = true, ["J9-Meretta"] = true
+    ["Beagle"]=true, ["I-412"]=true, ["Silver Steel RR-Snubby"]=true,
+    ["RR-Snubby"]=true, ["GG-17"]=true, ["J9-M"]=true, ["J9-Meretta"]=true
 }
 
--- State
-local espEnabled    = false
-local checkingRoles = false
-local running       = true
-local screenGui
+-- Global flags for cleanup
+if getgenv then
+    -- If an old instance provided a cleanup function, run it now
+    if getgenv()[UNIQUE.."_cleanup"] then
+        pcall(getgenv()[UNIQUE.."_cleanup"])
+    end
+    -- Mark this instance as active
+    getgenv()[UNIQUE.."_active"] = true
+end
 
--- Highlight helpers
-local function addHighlights(character, color)
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            local box = Instance.new("BoxHandleAdornment")
-            box.Name        = "ESPBox"
-            box.Adornee     = part
-            box.AlwaysOnTop = true
-            box.ZIndex      = 10
-            box.Size        = part.Size
-            box.Color3      = color
-            box.Transparency= 0.7
-            box.Parent      = part
+-- Define cleanup function
+local function cleanup()
+    -- Stop loops
+    if getgenv then
+        getgenv()[UNIQUE.."_active"] = false
+    end
+    -- Destroy GUI
+    local gui = lp:FindFirstChild("PlayerGui") and lp.PlayerGui:FindFirstChild("ESP_Gui")
+    if gui then gui:Destroy() end
+    -- Remove all highlights
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl.Character then
+            local hl = pl.Character:FindFirstChild("ESP_Highlight")
+            if hl then hl:Destroy() end
         end
     end
 end
 
-local function clearHighlights(character)
-    for _, part in ipairs(character:GetDescendants()) do
-        local box = part:FindFirstChild("ESPBox")
-        if box then
-            box:Destroy()
-        end
-    end
+-- Expose cleanup for future reloads
+if getgenv then
+    getgenv()[UNIQUE.."_cleanup"] = cleanup
+end
+
+-- Self-reload setup
+local SOURCE_URL = "https://raw.githubusercontent.com/uzergit/blooddebt-rbx/refs/heads/main/main"
+local THIS_SCRIPT = script
+
+local function reloadScript()
+    cleanup()
+    -- Wait a moment to let everything die
+    task.delay(0.1, function()
+        loadstring(game:HttpGet(SOURCE_URL))()
+    end)
+    pcall(function() THIS_SCRIPT:Destroy() end)
+end
+
+-- Script state
+local espEnabled    = false
+local checkingRoles = false
+
+-- Highlight helpers
+local function addHighlight(character, color)
+    local hl = Instance.new("Highlight")
+    hl.Name              = "ESP_Highlight"
+    hl.Adornee           = character
+    hl.FillColor         = color
+    hl.FillTransparency  = 0.5
+    hl.OutlineTransparency = 1
+    hl.Parent            = character
+end
+
+local function clearHighlight(character)
+    local hl = character:FindFirstChild("ESP_Highlight")
+    if hl then hl:Destroy() end
 end
 
 -- Role detection
 local function playerHasRole(player)
-    local function checkContainer(container)
+    local function check(container)
         if not container then return nil end
         for _, item in ipairs(container:GetChildren()) do
-            if killerWeapons[item.Name] then
-                return "Killer"
-            elseif vigilanteWeapons[item.Name] then
-                return "Vigilante"
-            end
+            if killerWeapons[item.Name] then return "Killer" end
+            if vigilanteWeapons[item.Name] then return "Vigilante" end
         end
     end
-
-    local role = checkContainer(player:FindFirstChildOfClass("Backpack"))
+    local role = check(player:FindFirstChildOfClass("Backpack"))
     if role then return role end
     if player.Character then
-        role = checkContainer(player.Character)
+        return check(player.Character)
     end
-    return role
+    return nil
 end
 
--- Scan once, highlight if found
 local function detectRoles()
     local found = false
     for _, pl in ipairs(Players:GetPlayers()) do
         if pl ~= lp and pl.Character then
+            clearHighlight(pl.Character)
             local role = playerHasRole(pl)
-            clearHighlights(pl.Character)
             if role == "Killer" then
-                addHighlights(pl.Character, Color3.fromRGB(255, 0, 0))
+                addHighlight(pl.Character, Color3.fromRGB(255,0,0))
                 found = true
             elseif role == "Vigilante" then
-                addHighlights(pl.Character, Color3.fromRGB(0, 255, 255))
+                addHighlight(pl.Character, Color3.fromRGB(0,255,255))
                 found = true
             end
         end
@@ -105,55 +126,59 @@ end
 
 -- GUI builder
 local function buildGUI()
-    if screenGui then screenGui:Destroy() end
+    cleanup()  -- ensure no leftover
+    local gui = Instance.new("ScreenGui")
+    gui.Name         = "ESP_Gui"
+    gui.ResetOnSpawn = false
+    gui.Parent       = lp:WaitForChild("PlayerGui")
 
-    screenGui = Instance.new("ScreenGui")
-    screenGui.Name            = "ESP_Gui"
-    screenGui.ResetOnSpawn    = false
-    screenGui.Parent          = lp:WaitForChild("PlayerGui")
-
-    local frame = Instance.new("Frame", screenGui)
+    local frame = Instance.new("Frame", gui)
     frame.Name               = "MainFrame"
-    frame.Size               = UDim2.new(0, 200, 0, 50)
-    frame.Position           = UDim2.new(0, 20, 0, 20)
-    frame.BackgroundColor3   = Color3.fromRGB(30, 30, 30)
+    frame.Size               = UDim2.new(0,220,0,80)
+    frame.Position           = UDim2.new(0,20,0,20)
+    frame.BackgroundColor3   = Color3.fromRGB(30,30,30)
     frame.BorderSizePixel    = 0
     frame.Active             = true
     frame.Draggable          = true
 
     local label = Instance.new("TextLabel", frame)
-    label.Size               = UDim2.new(1, 0, 0, 20)
+    label.Size               = UDim2.new(1,0,0,20)
+    label.Position           = UDim2.new(0,0,0,0)
     label.BackgroundTransparency = 1
-    label.Text               = "ESP Toggle"
-    label.TextColor3         = Color3.fromRGB(255, 255, 255)
+    label.Text               = "ESP / Reload"
+    label.TextColor3         = Color3.fromRGB(255,255,255)
     label.TextScaled         = true
 
-    local btn = Instance.new("TextButton", frame)
-    btn.Size                 = UDim2.new(1, 0, 0, 30)
-    btn.Position             = UDim2.new(0, 0, 0, 20)
-    btn.BackgroundColor3     = Color3.fromRGB(50, 50, 50)
-    btn.TextColor3           = Color3.fromRGB(255, 255, 255)
-    btn.Text                 = espEnabled and "Disable ESP" or "Enable ESP"
-
-    btn.MouseButton1Click:Connect(function()
+    local espBtn = Instance.new("TextButton", frame)
+    espBtn.Size               = UDim2.new(0.5,-5,0,30)
+    espBtn.Position           = UDim2.new(0,0,0,30)
+    espBtn.BackgroundColor3   = Color3.fromRGB(50,50,50)
+    espBtn.TextColor3         = Color3.fromRGB(255,255,255)
+    espBtn.Text               = espEnabled and "Disable ESP" or "Enable ESP"
+    espBtn.MouseButton1Click:Connect(function()
         espEnabled = not espEnabled
-        btn.Text   = espEnabled and "Disable ESP" or "Enable ESP"
+        espBtn.Text = espEnabled and "Disable ESP" or "Enable ESP"
         checkingRoles = espEnabled
         if not espEnabled then
             for _, p in ipairs(Players:GetPlayers()) do
-                if p.Character then
-                    clearHighlights(p.Character)
-                end
+                if p.Character then clearHighlight(p.Character) end
             end
         else
             detectRoles()
         end
     end)
+
+    local reloadBtn = Instance.new("TextButton", frame)
+    reloadBtn.Size             = UDim2.new(0.5,-5,0,30)
+    reloadBtn.Position         = UDim2.new(0.5,5,0,30)
+    reloadBtn.BackgroundColor3 = Color3.fromRGB(80,50,50)
+    reloadBtn.TextColor3       = Color3.fromRGB(255,255,255)
+    reloadBtn.Text             = "Reload Script"
+    reloadBtn.MouseButton1Click:Connect(reloadScript)
 end
 
--- Death & Respawn
+-- Death handler
 local function onDeath()
-    running = false -- stop the esp loop
     reloadScript()
 end
 
@@ -162,28 +187,19 @@ local function onCharacterAdded(char)
     hum.Died:Connect(onDeath)
     task.wait(1)
     buildGUI()
-
     if espEnabled then
         checkingRoles = true
         detectRoles()
-        local btn = screenGui:FindFirstChild("MainFrame"):FindFirstChildOfClass("TextButton")
-        if btn then
-            btn.Text = "Disable ESP"
-        end
     end
 end
 
 -- Main loop
-lp.CharacterAdded:Connect(onCharacterAdded)
-if lp.Character then
-    onCharacterAdded(lp.Character)
-end
+Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+if lp.Character then onCharacterAdded(lp.Character) end
 
 task.spawn(function()
-    while running do
-        if espEnabled and checkingRoles then
-            detectRoles()
-        end
+    while getgenv and getgenv()[UNIQUE.."_active"] do
+        if espEnabled and checkingRoles then detectRoles() end
         task.wait(1)
     end
 end)
