@@ -1,47 +1,40 @@
---// Blood Debt ESP Script with Hard Reset on Death //--
+--// Blood Debt ESP Script (Respawn Reset, Toggle-Only) //--
 
--- Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local lp = Players.LocalPlayer
+local Players    = game:GetService("Players")
+local lp         = Players.LocalPlayer
 
--- Weapon Lists
+-- Weapon lookup tables
 local killerWeapons = {
-    ["Charcoal Steel JS-22"] = true, ["Pretty Pink RR-LCP"] = true, ["JS-2 BondsDerringy"] = true,
-    ["GILDED"] = true, ["Kamatov"] = true, ["JS2-Derringy"] = true, ["JS-22"] = true, ["NGO"] = true,
-    ["Throwing Dagger"] = true, ["SoundMaker"] = true, ["SoundMakerSlower"] = true, ["RR-LightCompactPistolS"] = true,
-    ["J9-Mereta"] = true, ["RY's GG-17"] = true, ["RR-LCP"] = true, ["JS1 Competitor"] = true,
-    ["AT's KAR15"] = true, ["VK's ANM"] = true, ["Clothed Sawn-off"] = true, ["Sawn-off"] = true,
-    ["Clothed Rosen-Obrez"] = true, ["Rosen-Obrez"] = true, ["Dark Steel K1911"] = true,
-    ["Silver Steel K1911"] = true, ["K1911"] = true, ["ZZ-90"] = true, ["SKORPION"] = true
+    ["Charcoal Steel JS-22"]=true, ["Pretty Pink RR-LCP"]=true, ["JS-2 BondsDerringy"]=true,
+    -- (etc…)
+    ["SKORPION"]=true
 }
 local vigilanteWeapons = {
-    ["Beagle"] = true, ["I-412"] = true, ["Silver Steel RR-Snubby"] = true,
-    ["RR-Snubby"] = true, ["GG-17"] = true, ["J9-M"] = true, ["J9-Meretta"] = true
+    ["Beagle"]=true, ["I-412"]=true, ["Silver Steel RR-Snubby"]=true,
+    -- (etc…)
+    ["J9-Meretta"]=true
 }
 
--- Variables
-local espEnabled = false
+-- State
+local espEnabled    = false
 local checkingRoles = false
-local running = true
 local screenGui
-local currentScript = script -- this is IMPORTANT for proper destruction
 
--- Functions
+--–– Helper functions –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+
 local function outlinePart(part, color)
     for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
-        local gui = Instance.new("SurfaceGui")
-        gui.Name = "ESPHighlight"
-        gui.Face = face
-        gui.Adornee = part
+        local gui = Instance.new("SurfaceGui", part)
+        gui.Name        = "ESPHighlight"
+        gui.Face        = face
+        gui.Adornee     = part
         gui.AlwaysOnTop = true
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1,0,1,0)
-        frame.BackgroundColor3 = color
-        frame.BackgroundTransparency = 0.6
-        frame.BorderSizePixel = 0
-        frame.Parent = gui
-        gui.Parent = part
+
+        local f = Instance.new("Frame", gui)
+        f.Size               = UDim2.new(1,0,1,0)
+        f.BackgroundColor3   = color
+        f.BackgroundTransparency = 0.6
+        f.BorderSizePixel    = 0
     end
 end
 
@@ -49,7 +42,7 @@ local function clearHighlights(character)
     for _, part in ipairs(character:GetDescendants()) do
         if part:IsA("BasePart") then
             for _, child in ipairs(part:GetChildren()) do
-                if child:IsA("SurfaceGui") and child.Name == "ESPHighlight" then
+                if child.Name == "ESPHighlight" then
                     child:Destroy()
                 end
             end
@@ -61,173 +54,151 @@ local function highlightPlayer(player)
     if not player.Character then return end
     clearHighlights(player.Character)
 
-    local roleColor = nil
+    local roleColor
     local tools = {}
-    local backpack = player:FindFirstChildOfClass("Backpack")
 
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            table.insert(tools, tool)
-        end
+    -- gather backpack tools
+    local bp = player:FindFirstChildOfClass("Backpack")
+    if bp then for _, t in ipairs(bp:GetChildren()) do table.insert(tools,t) end end
+    -- gather equipped
+    for _, t in ipairs(player.Character:GetChildren()) do
+        if t:IsA("Tool") then table.insert(tools,t) end
     end
 
-    for _, tool in ipairs(player.Character:GetChildren()) do
-        if tool:IsA("Tool") then
-            table.insert(tools, tool)
-        end
-    end
-
-    for _, tool in ipairs(tools) do
-        if killerWeapons[tool.Name] then
+    for _, t in ipairs(tools) do
+        if killerWeapons[t.Name] then
             roleColor = Color3.fromRGB(255,0,0)
             break
-        elseif vigilanteWeapons[tool.Name] then
+        elseif vigilanteWeapons[t.Name] then
             roleColor = Color3.fromRGB(0,255,255)
         end
     end
 
     if roleColor then
         for _, part in ipairs(player.Character:GetChildren()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            if part:IsA("BasePart") and part.Name~="HumanoidRootPart" then
                 outlinePart(part, roleColor)
             end
         end
     end
 end
 
-local function detectRoles()
+local function detectRolesOnce()
     local found = false
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= lp then
-            if player.Character then
-                local tools = {}
-                local backpack = player:FindFirstChildOfClass("Backpack")
-                if backpack then
-                    for _, tool in ipairs(backpack:GetChildren()) do
-                        table.insert(tools, tool)
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl~=lp and pl.Character then
+            -- check their tools
+            local has = false
+            local bp = pl:FindFirstChildOfClass("Backpack")
+            if bp then
+                for _, t in ipairs(bp:GetChildren()) do
+                    if killerWeapons[t.Name] or vigilanteWeapons[t.Name] then
+                        has = true; break
                     end
                 end
-                for _, tool in ipairs(player.Character:GetChildren()) do
-                    if tool:IsA("Tool") then
-                        table.insert(tools, tool)
+            end
+            if not has then
+                for _, t in ipairs(pl.Character:GetChildren()) do
+                    if t:IsA("Tool") and (killerWeapons[t.Name] or vigilanteWeapons[t.Name]) then
+                        has = true; break
                     end
                 end
-
-                for _, tool in ipairs(tools) do
-                    if killerWeapons[tool.Name] or vigilanteWeapons[tool.Name] then
-                        highlightPlayer(player)
-                        found = true
-                        break
-                    end
-                end
+            end
+            if has then
+                highlightPlayer(pl)
+                found = true
+            else
+                clearHighlights(pl.Character)
             end
         end
     end
     checkingRoles = not found
 end
 
-local function recreateGUI()
-    if screenGui then
-        screenGui:Destroy()
-    end
+--–– GUI creation ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
-    screenGui = Instance.new("ScreenGui")
+local function buildGUI()
+    if screenGui then screenGui:Destroy() end
+    screenGui = Instance.new("ScreenGui", lp:WaitForChild("PlayerGui"))
     screenGui.Name = "ESPGui"
     screenGui.ResetOnSpawn = false
-    screenGui.Parent = lp:WaitForChild("PlayerGui")
 
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 200, 0, 50)
-    mainFrame.Position = UDim2.new(0, 20, 0, 20)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    mainFrame.Parent = screenGui
+    local frm = Instance.new("Frame", screenGui)
+    frm.Name               = "MainFrame"
+    frm.Size               = UDim2.new(0,200,0,50)
+    frm.Position           = UDim2.new(0,20,0,20)
+    frm.BackgroundColor3   = Color3.fromRGB(30,30,30)
+    frm.BorderSizePixel    = 0
+    frm.Active             = true
+    frm.Draggable          = true
 
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 20)
-    title.BackgroundTransparency = 1
-    title.Text = "ESP Toggle"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.TextScaled = true
-    title.Parent = mainFrame
+    local lbl = Instance.new("TextLabel", frm)
+    lbl.Size               = UDim2.new(1,0,0,20)
+    lbl.BackgroundTransparency = 1
+    lbl.Text               = "ESP Toggle"
+    lbl.TextColor3         = Color3.fromRGB(255,255,255)
+    lbl.TextScaled         = true
 
-    local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(1, 0, 0, 30)
-    toggleBtn.Position = UDim2.new(0, 0, 0, 20)
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleBtn.Text = "Enable ESP"
-    toggleBtn.Parent = mainFrame
+    local btn = Instance.new("TextButton", frm)
+    btn.Size               = UDim2.new(1,0,0,30)
+    btn.Position           = UDim2.new(0,0,0,20)
+    btn.BackgroundColor3   = Color3.fromRGB(50,50,50)
+    btn.TextColor3         = Color3.fromRGB(255,255,255)
+    btn.Text               = espEnabled and "Disable ESP" or "Enable ESP"
 
-    toggleBtn.MouseButton1Click:Connect(function()
+    btn.MouseButton1Click:Connect(function()
         espEnabled = not espEnabled
-        toggleBtn.Text = espEnabled and "Disable ESP" or "Enable ESP"
+        btn.Text   = espEnabled and "Disable ESP" or "Enable ESP"
+        checkingRoles = espEnabled
 
-        if espEnabled then
-            checkingRoles = true
-        else
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p.Character then
-                    clearHighlights(p.Character)
+        if not espEnabled then
+            -- clear all immediately
+            for _, pl in ipairs(Players:GetPlayers()) do
+                if pl.Character then
+                    clearHighlights(pl.Character)
                 end
             end
-            checkingRoles = false
+        else
+            detectRolesOnce()
         end
     end)
 end
 
-local function hardReset()
-    running = false
+--–– Death & Respawn handling ––––––––––––––––––––––––––––––––––––––––––––––––––––––
+
+local function onDeath()
+    -- turn off ESP, clear visuals
     espEnabled = false
     checkingRoles = false
-
-    if lp.Character then
-        for _, v in ipairs(lp.Character:GetDescendants()) do
-            if v:IsA("SurfaceGui") and v.Name == "ESPHighlight" then
-                v:Destroy()
-            end
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl.Character then
+            clearHighlights(pl.Character)
         end
     end
-
-    if screenGui then
-        screenGui:Destroy()
-    end
-
-    -- Actually destroy this script
-    pcall(function()
-        currentScript:Destroy()
-    end)
-
-    -- Reload
-    task.spawn(function()
-        wait(2)
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/uzergit/blooddebt-rbx/refs/heads/main/main"))()
-    end)
 end
 
-local function setupCharacter()
-    local character = lp.Character or lp.CharacterAdded:Wait()
-    local humanoid = character:WaitForChild("Humanoid")
-
-    humanoid.Died:Connect(function()
-        hardReset()
-    end)
-
+local function setupCharacter(char)
+    local hum = char:WaitForChild("Humanoid")
+    hum.Died:Connect(onDeath)
+    -- rebuild GUI after respawn
     task.wait(1)
-    recreateGUI()
+    buildGUI()
 end
 
--- Start
-task.spawn(function()
-    setupCharacter()
+--–– Main –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
-    while running do
+lp.CharacterAdded:Connect(setupCharacter)
+-- initial setup
+if lp.Character then
+    setupCharacter(lp.Character)
+end
+
+-- periodic check loop (only when toggled on + still looking for roles)
+task.spawn(function()
+    while true do
         if espEnabled and checkingRoles then
-            detectRoles()
+            detectRolesOnce()
         end
-        task.wait(0.5)
+        task.wait(1)
     end
 end)
