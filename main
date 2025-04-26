@@ -1,4 +1,4 @@
---// Blood Debt ESP Script with Smart Reload //--
+--// Blood Debt ESP Script with Hard Reset on Death //--
 
 -- Services
 local Players = game:GetService("Players")
@@ -25,6 +25,7 @@ local espEnabled = false
 local checkingRoles = false
 local running = true
 local screenGui
+local currentScript = script -- this is IMPORTANT for proper destruction
 
 -- Functions
 local function outlinePart(part, color)
@@ -195,8 +196,14 @@ local function hardReset()
         screenGui:Destroy()
     end
 
+    -- Actually destroy this script
+    pcall(function()
+        currentScript:Destroy()
+    end)
+
+    -- Reload
     task.spawn(function()
-        wait(3)
+        wait(2)
         loadstring(game:HttpGet("https://raw.githubusercontent.com/uzergit/blooddebt-rbx/refs/heads/main/main"))()
     end)
 end
@@ -206,8 +213,6 @@ local function setupCharacter()
     local humanoid = character:WaitForChild("Humanoid")
 
     humanoid.Died:Connect(function()
-        humanoid.Died:Wait()
-        lp.CharacterAdded:Wait()
         hardReset()
     end)
 
@@ -223,6 +228,6 @@ task.spawn(function()
         if espEnabled and checkingRoles then
             detectRoles()
         end
-        task.wait(0.5) -- Smarter: reduces lag even more
+        task.wait(0.5)
     end
 end)
