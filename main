@@ -1,7 +1,7 @@
 --// Blood Debt ESP Script (Self-Reloading) //--
 
 -- Self reload setup
-local sourceURL = "PASTE_YOUR_RAW_SCRIPT_URL_HERE" -- 👈 Replace this with your raw pastebin or source link
+local sourceURL = "https://raw.githubusercontent.com/uzergit/blooddebt-rbx/refs/heads/main/main"
 
 local function reloadScript()
     task.spawn(function()
