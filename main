@@ -1,4 +1,13 @@
---// Blood Debt ESP Script (Complete) //--
+--// Blood Debt ESP Script (Self-Reloading) //--
+
+-- Self reload setup
+local sourceURL = "PASTE_YOUR_RAW_SCRIPT_URL_HERE" -- 👈 Replace this with your raw pastebin or source link
+
+local function reloadScript()
+    task.spawn(function()
+        local newScript = loadstring(game:HttpGet(sourceURL))()
+    end)
+end
 
 -- Services
 local Players    = game:GetService("Players")
@@ -32,7 +41,7 @@ local screenGui
 local function addHighlights(character, color)
     for _, part in ipairs(character:GetDescendants()) do
         if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            local box = Instance.new("BoxHandleAdornment", part)
+            local box = Instance.new("BoxHandleAdornment")
             box.Name        = "ESPBox"
             box.Adornee     = part
             box.AlwaysOnTop = true
@@ -40,6 +49,7 @@ local function addHighlights(character, color)
             box.Size        = part.Size
             box.Color3      = color
             box.Transparency= 0.7
+            box.Parent      = part
         end
     end
 end
@@ -47,7 +57,9 @@ end
 local function clearHighlights(character)
     for _, part in ipairs(character:GetDescendants()) do
         local box = part:FindFirstChild("ESPBox")
-        if box then box:Destroy() end
+        if box then
+            box:Destroy()
+        end
     end
 end
 
@@ -141,13 +153,8 @@ end
 
 -- Death & Respawn
 local function onDeath()
-    espEnabled    = false
-    checkingRoles = false
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then
-            clearHighlights(p.Character)
-        end
-    end
+    running = false -- stop the esp loop
+    reloadScript()
 end
 
 local function onCharacterAdded(char)
@@ -155,6 +162,15 @@ local function onCharacterAdded(char)
     hum.Died:Connect(onDeath)
     task.wait(1)
     buildGUI()
+
+    if espEnabled then
+        checkingRoles = true
+        detectRoles()
+        local btn = screenGui:FindFirstChild("MainFrame"):FindFirstChildOfClass("TextButton")
+        if btn then
+            btn.Text = "Disable ESP"
+        end
+    end
 end
 
 -- Main loop
