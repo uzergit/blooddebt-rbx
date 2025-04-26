@@ -1,18 +1,32 @@
--- Custom Moveable Dark GUI ESP Script (Auto Reload After Death)
+--// Blood Debt ESP Script with Smart Reload //--
+
+-- Services
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local lp = Players.LocalPlayer
 
-local killerWeapons = { ["Charcoal Steel JS-22"] = true, ["Pretty Pink RR-LCP"] = true, ["JS-2 BondsDerringy"] = true, ["GILDED"] = true, ["Kamatov"] = true, ["JS2-Derringy"] = true, ["JS-22"] = true, ["NGO"] = true, ["Throwing Dagger"] = true, ["SoundMaker"] = true, ["SoundMakerSlower"] = true, ["RR-LightCompactPistolS"] = true, ["J9-Mereta"] = true, ["RY's GG-17"] = true, ["RR-LCP"] = true, ["JS1 Competitor"] = true, ["AT's KAR15"] = true, ["VK's ANM"] = true, ["Clothed Sawn-off"] = true, ["Sawn-off"] = true, ["Clothed Rosen-Obrez"] = true, ["Rosen-Obrez"] = true, ["Dark Steel K1911"] = true, ["Silver Steel K1911"] = true, ["K1911"] = true, ["ZZ-90"] = true, ["SKORPION"] = true }
-local vigilanteWeapons = { ["Beagle"] = true, ["I-412"] = true, ["Silver Steel RR-Snubby"] = true, ["RR-Snubby"] = true, ["GG-17"] = true, ["J9-M"] = true, ["J9-Meretta"] = true }
+-- Weapon Lists
+local killerWeapons = {
+    ["Charcoal Steel JS-22"] = true, ["Pretty Pink RR-LCP"] = true, ["JS-2 BondsDerringy"] = true,
+    ["GILDED"] = true, ["Kamatov"] = true, ["JS2-Derringy"] = true, ["JS-22"] = true, ["NGO"] = true,
+    ["Throwing Dagger"] = true, ["SoundMaker"] = true, ["SoundMakerSlower"] = true, ["RR-LightCompactPistolS"] = true,
+    ["J9-Mereta"] = true, ["RY's GG-17"] = true, ["RR-LCP"] = true, ["JS1 Competitor"] = true,
+    ["AT's KAR15"] = true, ["VK's ANM"] = true, ["Clothed Sawn-off"] = true, ["Sawn-off"] = true,
+    ["Clothed Rosen-Obrez"] = true, ["Rosen-Obrez"] = true, ["Dark Steel K1911"] = true,
+    ["Silver Steel K1911"] = true, ["K1911"] = true, ["ZZ-90"] = true, ["SKORPION"] = true
+}
+local vigilanteWeapons = {
+    ["Beagle"] = true, ["I-412"] = true, ["Silver Steel RR-Snubby"] = true,
+    ["RR-Snubby"] = true, ["GG-17"] = true, ["J9-M"] = true, ["J9-Meretta"] = true
+}
 
-local screenGui
-local mainFrame
-local title
-local toggleBtn
+-- Variables
 local espEnabled = false
 local checkingRoles = false
 local running = true
+local screenGui
 
+-- Functions
 local function outlinePart(part, color)
     for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
         local gui = Instance.new("SurfaceGui")
@@ -21,7 +35,7 @@ local function outlinePart(part, color)
         gui.Adornee = part
         gui.AlwaysOnTop = true
         local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, 0, 1, 0)
+        frame.Size = UDim2.new(1,0,1,0)
         frame.BackgroundColor3 = color
         frame.BackgroundTransparency = 0.6
         frame.BorderSizePixel = 0
@@ -45,15 +59,17 @@ end
 local function highlightPlayer(player)
     if not player.Character then return end
     clearHighlights(player.Character)
+
     local roleColor = nil
     local tools = {}
-
     local backpack = player:FindFirstChildOfClass("Backpack")
+
     if backpack then
         for _, tool in ipairs(backpack:GetChildren()) do
             table.insert(tools, tool)
         end
     end
+
     for _, tool in ipairs(player.Character:GetChildren()) do
         if tool:IsA("Tool") then
             table.insert(tools, tool)
@@ -62,10 +78,10 @@ local function highlightPlayer(player)
 
     for _, tool in ipairs(tools) do
         if killerWeapons[tool.Name] then
-            roleColor = Color3.fromRGB(255, 0, 0)
+            roleColor = Color3.fromRGB(255,0,0)
             break
         elseif vigilanteWeapons[tool.Name] then
-            roleColor = Color3.fromRGB(0, 255, 255)
+            roleColor = Color3.fromRGB(0,255,255)
         end
     end
 
@@ -78,71 +94,48 @@ local function highlightPlayer(player)
     end
 end
 
-local function anyoneHasRole()
+local function detectRoles()
+    local found = false
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= lp then
-            local backpack = player:FindFirstChildOfClass("Backpack")
-            local character = player.Character
-            if backpack then
-                for _, tool in ipairs(backpack:GetChildren()) do
+            if player.Character then
+                local tools = {}
+                local backpack = player:FindFirstChildOfClass("Backpack")
+                if backpack then
+                    for _, tool in ipairs(backpack:GetChildren()) do
+                        table.insert(tools, tool)
+                    end
+                end
+                for _, tool in ipairs(player.Character:GetChildren()) do
+                    if tool:IsA("Tool") then
+                        table.insert(tools, tool)
+                    end
+                end
+
+                for _, tool in ipairs(tools) do
                     if killerWeapons[tool.Name] or vigilanteWeapons[tool.Name] then
-                        return true
-                    end
-                end
-            end
-            if character then
-                for _, tool in ipairs(character:GetChildren()) do
-                    if tool:IsA("Tool") and (killerWeapons[tool.Name] or vigilanteWeapons[tool.Name]) then
-                        return true
+                        highlightPlayer(player)
+                        found = true
+                        break
                     end
                 end
             end
         end
     end
-    return false
-end
-
-local function refreshESP()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= lp then
-            highlightPlayer(player)
-        end
-    end
-end
-
-local function clearAllESP()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Character then
-            clearHighlights(player.Character)
-        end
-    end
-end
-
-local function roleCheckerLoop()
-    while running and espEnabled do
-        if checkingRoles then
-            if anyoneHasRole() then
-                refreshESP()
-                checkingRoles = false
-            end
-        else
-            if not anyoneHasRole() then
-                clearAllESP()
-                checkingRoles = true
-            end
-        end
-        task.wait(1)
-    end
+    checkingRoles = not found
 end
 
 local function recreateGUI()
-    if screenGui then screenGui:Destroy() end
+    if screenGui then
+        screenGui:Destroy()
+    end
 
     screenGui = Instance.new("ScreenGui")
     screenGui.Name = "ESPGui"
+    screenGui.ResetOnSpawn = false
     screenGui.Parent = lp:WaitForChild("PlayerGui")
 
-    mainFrame = Instance.new("Frame", screenGui)
+    local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
     mainFrame.Size = UDim2.new(0, 200, 0, 50)
     mainFrame.Position = UDim2.new(0, 20, 0, 20)
@@ -150,20 +143,23 @@ local function recreateGUI()
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
     mainFrame.Draggable = true
+    mainFrame.Parent = screenGui
 
-    title = Instance.new("TextLabel", mainFrame)
+    local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 20)
     title.BackgroundTransparency = 1
     title.Text = "ESP Toggle"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.TextScaled = true
+    title.Parent = mainFrame
 
-    toggleBtn = Instance.new("TextButton", mainFrame)
+    local toggleBtn = Instance.new("TextButton")
     toggleBtn.Size = UDim2.new(1, 0, 0, 30)
     toggleBtn.Position = UDim2.new(0, 0, 0, 20)
     toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleBtn.Text = espEnabled and "Disable ESP" or "Enable ESP"
+    toggleBtn.Text = "Enable ESP"
+    toggleBtn.Parent = mainFrame
 
     toggleBtn.MouseButton1Click:Connect(function()
         espEnabled = not espEnabled
@@ -171,10 +167,13 @@ local function recreateGUI()
 
         if espEnabled then
             checkingRoles = true
-            task.spawn(roleCheckerLoop)
         else
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Character then
+                    clearHighlights(p.Character)
+                end
+            end
             checkingRoles = false
-            clearAllESP()
         end
     end)
 end
@@ -183,29 +182,47 @@ local function hardReset()
     running = false
     espEnabled = false
     checkingRoles = false
-    clearAllESP()
-    if screenGui then screenGui:Destroy() end
 
-    -- Rerun everything from scratch
+    if lp.Character then
+        for _, v in ipairs(lp.Character:GetDescendants()) do
+            if v:IsA("SurfaceGui") and v.Name == "ESPHighlight" then
+                v:Destroy()
+            end
+        end
+    end
+
+    if screenGui then
+        screenGui:Destroy()
+    end
+
     task.spawn(function()
-        wait(1) -- tiny wait to fully reset
-        loadstring(game:HttpGet("PASTE YOUR SCRIPT LINK OR SCRIPT BODY HERE"))()
+        wait(3)
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/uzergit/blooddebt-rbx/refs/heads/main/main"))()
     end)
 end
 
 local function setupCharacter()
     local character = lp.Character or lp.CharacterAdded:Wait()
-    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-    if humanoid then
-        humanoid.Died:Connect(function()
-            hardReset()
-        end)
-    end
+    local humanoid = character:WaitForChild("Humanoid")
+
+    humanoid.Died:Connect(function()
+        humanoid.Died:Wait()
+        lp.CharacterAdded:Wait()
+        hardReset()
+    end)
+
     task.wait(1)
     recreateGUI()
 end
 
-lp.CharacterAdded:Connect(setupCharacter)
-if lp.Character then
+-- Start
+task.spawn(function()
     setupCharacter()
-end
+
+    while running do
+        if espEnabled and checkingRoles then
+            detectRoles()
+        end
+        task.wait(0.5) -- Smarter: reduces lag even more
+    end
+end)
